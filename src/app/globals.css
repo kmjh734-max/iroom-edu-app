@@ -49,3 +49,47 @@
     @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6;
   }
 }
+
+@media print {
+  html,
+  body {
+    background: white !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #student-record-print-root {
+    visibility: visible;
+  }
+
+  #student-record-print-root,
+  #student-record-print-root * {
+    visibility: visible;
+  }
+
+  #student-record-print-modal {
+    position: static !important;
+    display: block !important;
+    background: white !important;
+    overflow: visible !important;
+    visibility: visible !important;
+  }
+
+  #student-record-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none !important;
+    margin: 0 auto !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+}

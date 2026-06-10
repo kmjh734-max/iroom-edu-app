@@ -6,30 +6,40 @@ import {
 } from "@/lib/auth/roles";
 import type { UserRole } from "@/types/database";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/auth/callback",
+  "/student-record/share",
+  "/api/student-records/share",
+];
+
+function isPublicPath(pathname: string): boolean {
+  if (PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return true;
+  }
+  if (pathname.startsWith("/_next")) return true;
+  if (pathname.startsWith("/favicon")) return true;
+  if (pathname.startsWith("/image/")) return true;
+  if (pathname.startsWith("/images/")) return true;
+  if (pathname === "/pdf.worker.min.mjs") return true;
+  if (/\.(svg|png|jpg|jpeg|gif|webp|ico|mjs)$/i.test(pathname)) return true;
+  return false;
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.includes(".")
-  ) {
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
   const { supabase, user, supabaseResponse } = await updateSession(request);
 
-  const isPublic = PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
-  );
-
   if (!user) {
-    if (isPublic) return supabaseResponse;
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("redirectTo", pathname);
+    const returnPath = `${pathname}${request.nextUrl.search}`;
+    url.searchParams.set("redirect", returnPath);
     return NextResponse.redirect(url);
   }
 
@@ -50,6 +60,19 @@ export async function middleware(request: NextRequest) {
   const dashboardPath = getDashboardPathForRole(role);
 
   if (pathname === "/login") {
+    const rawRedirect =
+      request.nextUrl.searchParams.get("redirect") ??
+      request.nextUrl.searchParams.get("redirectTo");
+    if (
+      rawRedirect?.startsWith("/") &&
+      !rawRedirect.startsWith("//")
+    ) {
+      const url = request.nextUrl.clone();
+      const q = rawRedirect.indexOf("?");
+      url.pathname = q === -1 ? rawRedirect : rawRedirect.slice(0, q);
+      url.search = q === -1 ? "" : rawRedirect.slice(q);
+      return NextResponse.redirect(url);
+    }
     const url = request.nextUrl.clone();
     url.pathname = dashboardPath;
     return NextResponse.redirect(url);
@@ -77,6 +100,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|pdf.worker.min.mjs|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mjs)$).*)",
   ],
 };
