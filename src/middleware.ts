@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isVocabEnabled, isVocabPath } from "@/lib/academy-features";
 import { updateSession } from "@/lib/supabase/middleware";
 import {
   getDashboardPathForRole,
@@ -11,10 +12,14 @@ const PUBLIC_PREFIXES = [
   "/auth/callback",
   "/student-record/share",
   "/api/student-records/share",
+  "/exam-vocab",
+  "/api/exam-vocab",
 ];
 
 function isPublicPath(pathname: string): boolean {
-  if (PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+  if (
+    PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  ) {
     return true;
   }
   if (pathname.startsWith("/_next")) return true;
@@ -29,8 +34,24 @@ function isPublicPath(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  if (pathname.startsWith("/student/vocab/exam/")) {
+    const setId = pathname.replace("/student/vocab/exam/", "").split("/")[0];
+    if (setId) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/exam-vocab/${setId}`;
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (isPublicPath(pathname)) {
     return NextResponse.next();
+  }
+
+  if (!isVocabEnabled() && pathname.startsWith("/api/vocab")) {
+    return NextResponse.json(
+      { ok: false, message: "이 학원에서는 단어학습을 사용하지 않습니다." },
+      { status: 404 }
+    );
   }
 
   const { supabase, user, supabaseResponse } = await updateSession(request);
@@ -38,8 +59,7 @@ export async function middleware(request: NextRequest) {
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    const returnPath = `${pathname}${request.nextUrl.search}`;
-    url.searchParams.set("redirect", returnPath);
+    url.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(url);
   }
 
@@ -59,20 +79,14 @@ export async function middleware(request: NextRequest) {
 
   const dashboardPath = getDashboardPathForRole(role);
 
+  if (!isVocabEnabled() && isVocabPath(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = dashboardPath;
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   if (pathname === "/login") {
-    const rawRedirect =
-      request.nextUrl.searchParams.get("redirect") ??
-      request.nextUrl.searchParams.get("redirectTo");
-    if (
-      rawRedirect?.startsWith("/") &&
-      !rawRedirect.startsWith("//")
-    ) {
-      const url = request.nextUrl.clone();
-      const q = rawRedirect.indexOf("?");
-      url.pathname = q === -1 ? rawRedirect : rawRedirect.slice(0, q);
-      url.search = q === -1 ? "" : rawRedirect.slice(q);
-      return NextResponse.redirect(url);
-    }
     const url = request.nextUrl.clone();
     url.pathname = dashboardPath;
     return NextResponse.redirect(url);
